@@ -5,12 +5,17 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from datetime import datetime
 
+#Assumptions - 
+# announcements is a simple model with a stack field so we can pop off the latest announcements
+# matches might have to have a datetime field and be an object for a specific match
+# matches could also have a deque datatype and when a match is played it gets removed
 
-#make these models 
-from MatchReady.models import Team, Player, Fan, Coach, TeamSheet
+#make these models, player, fan and coach could all be subclasses of a base
 
-#make these forms
-from MatchReady.forms import NewTeamForm, FindTeamForm, UserForm, UserProfileForm, AnnouncementForm
+from MatchReady.models import Team, Player, Fan, Coach, TeamSheet, Matches
+
+#make these forms, player, fan and coach form could all be subclasses of a base
+from MatchReady.forms import NewTeamForm, FindTeamForm, PlayerForm, FanForm, CoachForm, UserForm, AnnouncementForm
 
 
 
@@ -33,23 +38,20 @@ def about (request):
 
 
 
-def register(request):
+def player_register(request):
     registered = False
     if request.method == 'POST':
         user_form = UserForm(request.POST)
-        profile_form = UserProfileForm(request.POST)
+        profile_form = PlayerProfileForm(request.POST)
 
         if user_form.is_valid() and profile_form.is_valid():
             user = user_form.save()
 
-
-
-            #Add coach, fan into models, default is player
+            #Add coach, fan into models
             user.set_password(user.password)
             user.set_coach(user.isCoach)
             user.set_fan(user.isFan)
-
-
+            user.set_player(user.isPlayer)
 
             user.save()
 
@@ -64,7 +66,75 @@ def register(request):
             registered = True
     else:
         user_form = UserForm()
-        profile_form = UserProfileForm()
+        profile_form = PlayerProfileForm()
+
+    return render(request, 'MatchReady/register.html', context={
+        'user_form':user_form,
+        'profile_form':profile_form,
+        'registered':registered
+    })
+
+def fan_register(request):
+    registered = False
+    if request.method == 'POST':
+        user_form = UserForm(request.POST)
+        profile_form = FanProfileForm(request.POST)
+
+        if user_form.is_valid() and profile_form.is_valid():
+            user = user_form.save()
+
+            #Add coach, fan into models
+            user.set_password(user.password)
+            user.set_coach(user.isCoach)
+            user.set_fan(user.isFan)
+            user.set_player(user.isPlayer)
+
+            user.save()
+
+            profile = profile_form.save(commit=False)
+            profile.user = user
+
+            if 'picture' in request.FILES:
+                profile.picture = request.FILES['picture']
+            
+            profile.save()
+
+            registered = True
+    else:
+        user_form = UserForm()
+        profile_form = FanProfileForm()
+
+    return render(request, 'MatchReady/register.html', context={
+        'user_form':user_form,
+        'profile_form':profile_form,
+        'registered':registered
+    })
+
+def coach_register(request):
+    registered = False
+    if request.method == 'POST':
+        user_form = UserForm(request.POST)
+        profile_form = CoachProfileForm(request.POST)
+
+        if user_form.is_valid() and profile_form.is_valid():
+            user = user_form.save()
+
+            #Add coach, fan into models
+
+            user.save()
+
+            profile = profile_form.save(commit=False)
+            profile.user = user
+
+            if 'picture' in request.FILES:
+                profile.picture = request.FILES['picture']
+            
+            profile.save()
+
+            registered = True
+    else:
+        user_form = UserForm()
+        profile_form = CoachProfileForm()
 
     return render(request, 'MatchReady/register.html', context={
         'user_form':user_form,
@@ -103,9 +173,14 @@ def contact(request):
     return render(request,'MatchReady/contact.html', context=context_dict)
 
 def matches(request):
+    #next_matches = Match.objects.filter(finished=False).orderby('match_day')[:15]
+
+    #for x in range 15:
+    #   next_matches.append(Match.objects.all().deque.frontDequeue())
+    #for x in range 15:
+    #   Match.objects.all().deque.frontQueue(next_matches[x])
+
     context_dict = {}
-    #
-    #
     return render(request,'MatchReady/matches.html',context=context_dict)
 
 @login_required
@@ -160,17 +235,10 @@ def team_sheet(request):
 
 @login_required
 def announcements(request):
-    context_dict = {}
     #
     #
     return render(request,'MatchReady/announcements.html',context=context_dict)
-
-@login_required
-def matches(request):
-    context_dict = {}
-    #
-    #
-    return render(request,'MatchReady/matches.html',context=context_dict)
+ 
 
 def visitor_cookie_handler(request):
     visits = int(get_server_side_cookie(request,'visits','1'))

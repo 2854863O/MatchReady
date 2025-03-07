@@ -4,84 +4,34 @@ from django.http import HttpResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from datetime import datetime
-from rango.models import Category, Page
-from rango.forms import CategoryForm, PageForm, UserForm, UserProfileForm
+
+
+#make these models 
+from MatchReady.models import Team, Player, Fan, Coach, TeamSheet
+
+#make these forms
+from MatchReady.forms import NewTeamForm, FindTeamForm, UserForm, UserProfileForm, AnnouncementForm
 
 
 
 
-def index (request):
-    category_list = Category.objects.order_by('-likes')[:5]
-    page_list = Page.objects.order_by('-views')[:5]
+def home (request):
     context_dict = {}
-    context_dict['boldmessage'] = 'Crunchy, creamy, cookie, candy, cupcake!'
-    context_dict['categories'] = category_list
-    context_dict['pages'] = page_list
-    visitor_cookie_handler(request)
-    response = render(request, 'rango/index.html', context=context_dict)
+    #
+    #
+    response = render(request, 'MatchReady/home.html', context=context_dict)
     return response
 
 
 def about (request):
     context_dict = {}
-    visitor_cookie_handler(request)
-    context_dict['visits'] = request.session['visits']
-
-    response = render(request, 'rango/about.html', context=context_dict)
+    #
+    #
+    response = render(request, 'MatchReady/about.html', context=context_dict)
     return response
 
-def show_category(request, category_name_slug):
-    context_dict={}
 
-    try:
-        category = Category.objects.get(slug=category_name_slug)
-        pages = Page.objects.filter(category=category)
-        context_dict['pages'] = pages
-        context_dict['category'] = category
-    except Category.DoesNotExist:
-        context_dict['pages']=None
-        context_dict['category']=None
-    return render(request, 'rango/category.html', context=context_dict)
 
-@login_required
-def add_category(request):
-    form = CategoryForm()
-    
-    if request.method == 'POST':
-        form = CategoryForm(request.POST)
-        if form.is_valid():
-            form.save(commit=True)
-            return redirect(reverse('rango:index'))
-        else:
-            print(form.errors)
-            return render(request, "rango/add_category.html", {"form": form, "errors": form.errors})  
-    return render(request, 'rango/add_category.html',{'form':form}) 
-
-@login_required
-def add_page(request, category_name_slug):
-    try:
-        category = Category.objects.get(slug=category_name_slug)
-    except Category.DoesNotExist:
-        category=None
-
-    if category is None:
-        return redirect(reverse('rango:index'))
-    
-    form = PageForm()
-
-    if request.method == 'POST':
-        form = PageForm(request.POST)
-        if form.is_valid():
-            if category:
-                page = form.save(commit=False)
-                page.category = category
-                page.views = 0
-                page.save()
-                return redirect(reverse('rango:show_category',kwargs={'category_name_slug':category_name_slug}))
-            else:
-                print(form.errors)
-    context_dict = {'form': form,'category': category}
-    return render(request, 'rango/add_page.html', context=context_dict)
 
 def register(request):
     registered = False
@@ -91,7 +41,16 @@ def register(request):
 
         if user_form.is_valid() and profile_form.is_valid():
             user = user_form.save()
+
+
+
+            #Add coach, fan into models, default is player
             user.set_password(user.password)
+            user.set_coach(user.isCoach)
+            user.set_fan(user.isFan)
+
+
+
             user.save()
 
             profile = profile_form.save(commit=False)
@@ -107,7 +66,7 @@ def register(request):
         user_form = UserForm()
         profile_form = UserProfileForm()
 
-    return render(request, 'rango/register.html', context={
+    return render(request, 'MatchReady/register.html', context={
         'user_form':user_form,
         'profile_form':profile_form,
         'registered':registered
@@ -123,23 +82,95 @@ def user_login(request):
         if user:
             if user.is_active:
                 login(request, user)
-                return redirect(reverse('rango:index'))
+                return redirect(reverse('MatchReady:home'))
             else:
-                return HttpResponse("Your Rango account is disabled.")
+                return HttpResponse("Your MatchReady account is disabled.")
         else:
             print(f"Invalid login details: {username}, {password}")
             return HttpResponse("Invalid login details supplied.")
     else:
-        return render(request, 'rango/login.html')
+        return render(request, 'MatchReady/login.html')
     
-@login_required
-def restricted(request):
-    return render(request, 'rango/restricted.html')
-
 @login_required
 def user_logout(request):
     logout(request)
-    return redirect(reverse('rango:index'))
+    return redirect(reverse('MatchReady:home'))
+
+def contact(request):
+    context_dict={}
+    #
+    #
+    return render(request,'MatchReady/contact.html', context=context_dict)
+
+def matches(request):
+    context_dict = {}
+    #
+    #
+    return render(request,'MatchReady/matches.html',context=context_dict)
+
+@login_required
+def my_team(request):
+    context_dict = {}
+    #
+    #
+    return render(request,'MatchReady/my_team.html',context=context_dict)
+
+@login_required
+def find_team(request):
+    context_dict = {}
+    #
+    #
+    return render(request,'MatchReady/find_team.html',context=context_dict)
+
+@login_required
+def create_team(request):
+    context_dict = {}
+    #
+    #
+    return render(request,'MatchReady/create_team.html',context=context_dict)
+
+@login_required
+def create_announcement(request):
+    form = AnnouncementForm()
+    
+    if request.method == 'POST':
+        form = AnnouncementForm(request.POST)
+        if form.is_valid():
+            form.save(commit=True)
+            return redirect(reverse('MatchReady:home'))
+        else:
+            print(form.errors)
+            return render(request, "MatchReady/create_announcements.html", {"form": form, "errors": form.errors})  
+    return render(request, 'MatchReady/create_announcements.html',{'form':form}) 
+
+@login_required
+def team_detail(request):
+    context_dict = {}
+    #
+    #
+    return render(request,'MatchReady/team_detail.html',context=context_dict)
+
+@login_required
+def team_sheet(request):
+    context_dict = {}
+    team_sheet = TeamSheet.objects.get
+    context_dict['team_sheet'] = 
+    #
+    return render(request,'MatchReady/team_sheet.html',context=context_dict)
+
+@login_required
+def announcements(request):
+    context_dict = {}
+    #
+    #
+    return render(request,'MatchReady/announcements.html',context=context_dict)
+
+@login_required
+def matches(request):
+    context_dict = {}
+    #
+    #
+    return render(request,'MatchReady/matches.html',context=context_dict)
 
 def visitor_cookie_handler(request):
     visits = int(get_server_side_cookie(request,'visits','1'))
@@ -158,3 +189,58 @@ def get_server_side_cookie(request,cookie,default_val=None):
     if not val:
         val = default_val
     return val
+
+
+@login_required
+def add_page(request, category_name_slug):
+    try:
+        category = Category.objects.get(slug=category_name_slug)
+    except Category.DoesNotExist:
+        category=None
+
+    if category is None:
+        return redirect(reverse('MatchReady:home'))
+    
+    form = PageForm()
+
+    if request.method == 'POST':
+        form = PageForm(request.POST)
+        if form.is_valid():
+            if category:
+                page = form.save(commit=False)
+                page.category = category
+                page.views = 0
+                page.save()
+                return redirect(reverse('MatchReady:show_category',kwargs={'category_name_slug':category_name_slug}))
+            else:
+                print(form.errors)
+    context_dict = {'form': form,'category': category}
+    return render(request, 'MatchReady/add_page.html', context=context_dict)
+
+
+def show_category(request, category_name_slug):
+    context_dict={}
+
+    try:
+        category = Category.objects.get(slug=category_name_slug)
+        pages = Page.objects.filter(category=category)
+        context_dict['pages'] = pages
+        context_dict['category'] = category
+    except Category.DoesNotExist:
+        context_dict['pages']=None
+        context_dict['category']=None
+    return render(request, 'MatchReady/category.html', context=context_dict)
+
+@login_required
+def add_category(request):
+    form = CategoryForm()
+    
+    if request.method == 'POST':
+        form = CategoryForm(request.POST)
+        if form.is_valid():
+            form.save(commit=True)
+            return redirect(reverse('MatchReady:home'))
+        else:
+            print(form.errors)
+            return render(request, "MatchReady/add_category.html", {"form": form, "errors": form.errors})  
+    return render(request, 'MatchReady/add_category.html',{'form':form}) 

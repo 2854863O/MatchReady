@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.http import HttpResponse
 from django.contrib.auth import authenticate, login, logout
@@ -12,135 +12,58 @@ from datetime import datetime
 
 #make these models, player, fan and coach could all be subclasses of a base
 
-from MatchReady.models import Team, Player, Fan, Coach, TeamSheet, Matches
+from MatchReady.models import Team, User, Player, Fan, Coach, TeamSheet, Match
 
 #make these forms, player, fan and coach form could all be subclasses of a base
-from MatchReady.forms import NewTeamForm, FindTeamForm, PlayerForm, FanForm, CoachForm, UserForm, AnnouncementForm
+from MatchReady.forms import NewTeamForm, FindTeamForm, PlayerForm, FanForm, CoachForm, UserProfileForm, AnnouncementForm
 
 
 
 
 def home (request):
-    context_dict = {}
-    #
-    #
-    response = render(request, 'MatchReady/home.html', context=context_dict)
-    return response
-
+    return render(request, 'MatchReady/home.html')
 
 def about (request):
-    context_dict = {}
-    #
-    #
-    response = render(request, 'MatchReady/about.html', context=context_dict)
-    return response
+    return render(request, 'MatchReady/about.html')
 
-
-
-
-def player_register(request):
+def user_register(request, user_type):
     registered = False
+    form_types = {'player_form':PlayerForm,'coach_form':CoachForm,'fan_form':FanForm}
+
+    if user_type not in form_types:
+        return render(request, 'MatchReady/register.html', {'error': 'Not a valid user type'})
+    
+    selected_form = form_types[user_type]
     if request.method == 'POST':
-        user_form = UserForm(request.POST)
-        profile_form = PlayerProfileForm(request.POST)
+        user_form = selected_form(request.POST)
+        profile_form = UserProfileForm(request.POST)
 
         if user_form.is_valid() and profile_form.is_valid():
-            user = user_form.save()
-
-            #Add coach, fan into models
-            user.set_password(user.password)
-            user.set_coach(user.isCoach)
-            user.set_fan(user.isFan)
-            user.set_player(user.isPlayer)
-
-            user.save()
-
-            profile = profile_form.save(commit=False)
-            profile.user = user
-
-            if 'picture' in request.FILES:
-                profile.picture = request.FILES['picture']
-            
-            profile.save()
-
-            registered = True
+            registered = register(request, profile_form, user_form)
     else:
-        user_form = UserForm()
-        profile_form = PlayerProfileForm()
+        user_form = selected_form()
+        profile_form = UserProfileForm()
 
-    return render(request, 'MatchReady/register.html', context={
-        'user_form':user_form,
-        'profile_form':profile_form,
-        'registered':registered
+    return render(request, 'MatchReady/register.html', {
+        'user_form': user_form,
+        'profile_form': profile_form,
+        'registered': registered,
+        'user_type': user_type  
     })
 
-def fan_register(request):
-    registered = False
-    if request.method == 'POST':
-        user_form = UserForm(request.POST)
-        profile_form = FanProfileForm(request.POST)
+def register(request, profile_form,user_form):
+    user = user_form.save()
+    user.save()
 
-        if user_form.is_valid() and profile_form.is_valid():
-            user = user_form.save()
+    profile = profile_form.save(commit=False)
+    profile.user = user
 
-            #Add coach, fan into models
-            user.set_password(user.password)
-            user.set_coach(user.isCoach)
-            user.set_fan(user.isFan)
-            user.set_player(user.isPlayer)
+    if 'picture' in request.FILES:
+        profile.picture = request.FILES['picture']
+    
+    profile.save()
 
-            user.save()
-
-            profile = profile_form.save(commit=False)
-            profile.user = user
-
-            if 'picture' in request.FILES:
-                profile.picture = request.FILES['picture']
-            
-            profile.save()
-
-            registered = True
-    else:
-        user_form = UserForm()
-        profile_form = FanProfileForm()
-
-    return render(request, 'MatchReady/register.html', context={
-        'user_form':user_form,
-        'profile_form':profile_form,
-        'registered':registered
-    })
-
-def coach_register(request):
-    registered = False
-    if request.method == 'POST':
-        user_form = UserForm(request.POST)
-        profile_form = CoachProfileForm(request.POST)
-
-        if user_form.is_valid() and profile_form.is_valid():
-            user = user_form.save()
-
-            #Add coach, fan into models
-
-            user.save()
-
-            profile = profile_form.save(commit=False)
-            profile.user = user
-
-            if 'picture' in request.FILES:
-                profile.picture = request.FILES['picture']
-            
-            profile.save()
-
-            registered = True
-    else:
-        user_form = UserForm()
-        profile_form = CoachProfileForm()
-
-    return render(request, 'MatchReady/register.html', context={
-        'user_form':user_form,
-        'profile_form':profile_form,
-        'registered':registered
-    })
+    return True
 
 def user_login(request):
     if request.method=='POST':
@@ -167,12 +90,9 @@ def user_logout(request):
     return redirect(reverse('MatchReady:home'))
 
 def contact(request):
-    context_dict={}
-    #
-    #
-    return render(request,'MatchReady/contact.html', context=context_dict)
+    return render(request,'MatchReady/contact.html')
 
-def matches(request):
+def display_matches(request):
     #next_matches = Match.objects.filter(finished=False).orderby('match_day')[:15]
 
     #for x in range 15:
@@ -180,21 +100,39 @@ def matches(request):
     #for x in range 15:
     #   Match.objects.all().deque.frontQueue(next_matches[x])
 
-    context_dict = {}
+    context_dict = {'upcoming_matches':next_matches}
     return render(request,'MatchReady/matches.html',context=context_dict)
 
 @login_required
-def my_team(request):
-    context_dict = {}
-    #
-    #
+def my_team(request,user_slug):
+    user = User.objects.get(slug=user_slug)
+    teams = User.teams.all()
+    context_dict = {'teams':teams}
     return render(request,'MatchReady/my_team.html',context=context_dict)
 
 @login_required
-def find_team(request):
-    context_dict = {}
-    #
-    #
+def find_team(request,user_slug):
+    user = get_object_or_404(User,slug=user_slug)
+
+    if user is None:
+        return redirect(reverse('MatchReady:home'))
+    
+    form = FindTeamForm()
+
+    if request.method=='POST':
+        form = FindTeamForm(request.POST)
+        if form.is_valid():
+            if user:
+                team_id = form.cleaned_data['team_id']
+                try:
+                    team = Team.objects.get(id=team_id)  # Fetch the team instance
+                    user.teams.add(team)
+                    return redirect(reverse('MatchReady:my_team',kwargs={'user_slug':user_slug}))
+                except Team.DoesNotExist:
+                    return HttpResponse("Team ID is incorrect")
+            else:
+                print(form.errors)
+    context_dict = {'form':form,'user':user}
     return render(request,'MatchReady/find_team.html',context=context_dict)
 
 @login_required
@@ -204,8 +142,17 @@ def create_team(request):
     #
     return render(request,'MatchReady/create_team.html',context=context_dict)
 
+#Done first draft
 @login_required
-def create_announcement(request):
+def create_announcement(request,team_name_slug):
+    try:
+        team = Team.objects.get(slug=team_name_slug)
+    except Team.DoesNotExist:
+        team = None
+
+    if team is None:
+        return redirect(reverse('MatchReady:home'))
+    
     form = AnnouncementForm()
     
     if request.method == 'POST':
@@ -219,18 +166,18 @@ def create_announcement(request):
     return render(request, 'MatchReady/create_announcements.html',{'form':form}) 
 
 @login_required
-def team_detail(request):
-    context_dict = {}
+def team_detail(request, team_slug):
+    team = Team.objects.get(slug=team_slug)
+    context_dict = {'team_detail':team_detail}
     #
     #
     return render(request,'MatchReady/team_detail.html',context=context_dict)
 
 @login_required
-def team_sheet(request):
+def team_sheet(request,team_slug):
     context_dict = {}
-    team_sheet = TeamSheet.objects.get
-    context_dict['team_sheet'] = 
-    #
+    team_sheet = TeamSheet.objects.get(slug=team_slug)
+    context_dict['team_sheet'] = team_sheet
     return render(request,'MatchReady/team_sheet.html',context=context_dict)
 
 @login_required
